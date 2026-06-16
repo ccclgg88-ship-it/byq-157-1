@@ -26,7 +26,7 @@ interface SceneState {
   setDragging: (dragging: boolean, furnitureId?: string) => void;
   setCollisionWarning: (warning: string | null) => void;
 
-  addFurniture: (furnitureId: string, position: { x: number; y: number; z: number }, rotation: { x: number; y: number; z: number }, size: { width: number; depth: number; height: number }) => void;
+  addFurniture: (furnitureId: string, position: { x: number; y: number; z: number }, instanceId?: string) => void;
   updateFurniture: (instanceId: string, updates: Partial<FurnitureInstance>) => void;
   deleteFurniture: (instanceId: string) => void;
 
@@ -72,13 +72,13 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   setDragging: (dragging, furnitureId) => set({ isDragging: dragging, draggedFurnitureId: furnitureId || null }),
   setCollisionWarning: (warning) => set({ collisionWarning: warning }),
 
-  addFurniture: (furnitureId, position, rotation, size) => {
+  addFurniture: (furnitureId, position, instanceId) => {
     const state = get();
     const newInstance: FurnitureInstance = {
-      instanceId: generateInstanceId(),
+      instanceId: instanceId || generateInstanceId(),
       furnitureId,
       position,
-      rotation,
+      rotation: { x: 0, y: 0, z: 0 },
       scale: { x: 1, y: 1, z: 1 },
     };
 

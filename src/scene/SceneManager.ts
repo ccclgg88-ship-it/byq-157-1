@@ -14,6 +14,7 @@ import { FURNITURE_DATA } from '@/data/furniture';
 export interface SceneCallbacks {
   onSelectFurniture: (instanceId: string | null) => void;
   onFurnitureMoved: (instanceId: string, position: { x: number; y: number; z: number }, rotation: { x: number; y: number; z: number }) => void;
+  requestAddFurniture: (furnitureId: string, position: { x: number; y: number; z: number }) => string | null;
   onCollision: (hasCollision: boolean) => void;
 }
 
@@ -56,20 +57,29 @@ export class SceneManager {
     this.scene.fog = new THREE.Fog(0xfff0f5, 10, 30);
 
     this.camera = new THREE.PerspectiveCamera(
-      60,
+      55,
       container.clientWidth / container.clientHeight,
       0.1,
       100
     );
-    this.camera.position.set(12, 12, 12);
-    this.camera.lookAt(0, 0, 0);
+    this.camera.position.set(10, 7, 10);
+    this.camera.lookAt(0, 0.5, 0);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    container.appendChild(this.renderer.domElement);
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.2;
+    const canvas = this.renderer.domElement;
+    canvas.style.display = 'block';
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    container.appendChild(canvas);
 
     this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
     this.orbitControls.enableDamping = true;
@@ -209,7 +219,10 @@ export class SceneManager {
         );
 
         if (!collision) {
-          this.addFurniture(furnitureId, { x, y: 0, z }, { x: 0, y: 0, z: 0 });
+          const instanceId = this.addFurniture(furnitureId, { x, y: 0, z }, { x: 0, y: 0, z: 0 });
+          if (instanceId) {
+            this.callbacks.onFurnitureAdded(instanceId, furnitureId, { x, y: 0, z }, { x: 0, y: 0, z: 0 });
+          }
         } else {
           this.callbacks.onCollision(true);
         }
@@ -490,8 +503,8 @@ export class SceneManager {
   }
 
   public setPerspectiveView(): void {
-    this.camera.position.set(12, 12, 12);
-    this.camera.lookAt(0, 0, 0);
+    this.camera.position.set(8, 7, 8);
+    this.camera.lookAt(0, 1, 0);
     this.orbitControls.target.set(0, 1, 0);
     this.orbitControls.update();
   }

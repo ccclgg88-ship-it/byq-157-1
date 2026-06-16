@@ -16,7 +16,7 @@ export const FURNITURE_DATA: FurnitureItem[] = [
     category: 'sleep',
     size: { width: 1.5, depth: 1, height: 0.15 },
     color: '#E6E6FA',
-    icon: '🥰',
+    icon: '🛌',
     unlocked: true,
   },
   {

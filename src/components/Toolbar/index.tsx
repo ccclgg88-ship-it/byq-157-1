@@ -11,37 +11,37 @@ import {
   Move,
   RotateCcw,
   Maximize2,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import clsx from 'clsx';
 
 interface ToolbarProps {
   sceneRef: React.MutableRefObject<any>;
   onOpenSchemes: () => void;
+  onDelete: () => void;
 }
 
-export default function Toolbar({ sceneRef, onOpenSchemes }: ToolbarProps) {
+export default function Toolbar({ sceneRef, onOpenSchemes, onDelete }: ToolbarProps) {
   const {
     dayTime,
     setDayTime,
     showGrid,
     setShowGrid,
     selectedInstanceId,
-    deleteFurniture,
     undo,
     redo,
     canUndo,
     canRedo,
     gizmoMode,
     setGizmoMode,
-    isMobile,
   } = useSceneStore();
 
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showGizmoOptions, setShowGizmoOptions] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const handleToggleDayNight = () => {
+    if (isUpdating) return;
+    setIsUpdating(true);
+    setTimeout(() => setIsUpdating(false), 500);
+
     const newTime = dayTime === 'day' ? 'night' : 'day';
     setDayTime(newTime);
     if (sceneRef.current) {
@@ -57,14 +57,14 @@ export default function Toolbar({ sceneRef, onOpenSchemes }: ToolbarProps) {
     }
   };
 
-  const handleDelete = () => {
-    if (selectedInstanceId) {
-      deleteFurniture(selectedInstanceId);
-      if (sceneRef.current) {
-        sceneRef.current.removeFurniture(selectedInstanceId);
-      }
-      setShowDeleteConfirm(false);
-    }
+  const handleUndo = () => {
+    if (!canUndo()) return;
+    undo();
+  };
+
+  const handleRedo = () => {
+    if (!canRedo()) return;
+    redo();
   };
 
   const handleGizmoModeChange = (mode: 'translate' | 'rotate' | 'scale') => {
@@ -72,19 +72,16 @@ export default function Toolbar({ sceneRef, onOpenSchemes }: ToolbarProps) {
     if (sceneRef.current) {
       sceneRef.current.setGizmoMode(mode);
     }
-    setShowGizmoOptions(false);
   };
 
-  const gizmoIcons = {
-    translate: Move,
-    rotate: RotateCcw,
-    scale: Maximize2,
-  };
-
-  const GizmoIcon = gizmoIcons[gizmoMode];
+  const gizmoControls = [
+    { mode: 'translate' as const, icon: Move, label: '移动' },
+    { mode: 'rotate' as const, icon: RotateCcw, label: '旋转' },
+    { mode: 'scale' as const, icon: Maximize2, label: '缩放' },
+  ];
 
   return (
-    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30">
+    <div className="flex flex-col items-center gap-2">
       <div className="bg-white/90 backdrop-blur-md shadow-soft rounded-full px-4 py-2 flex items-center gap-2">
         <button
           onClick={handleToggleDayNight}
@@ -121,7 +118,7 @@ export default function Toolbar({ sceneRef, onOpenSchemes }: ToolbarProps) {
         <div className="w-px h-6 bg-pink-200" />
 
         <button
-          onClick={undo}
+          onClick={handleUndo}
           disabled={!canUndo()}
           className={clsx(
             'p-2 rounded-full transition-all duration-200 hover:scale-110',
@@ -135,7 +132,7 @@ export default function Toolbar({ sceneRef, onOpenSchemes }: ToolbarProps) {
         </button>
 
         <button
-          onClick={redo}
+          onClick={handleRedo}
           disabled={!canRedo()}
           className={clsx(
             'p-2 rounded-full transition-all duration-200 hover:scale-110',
@@ -150,71 +147,30 @@ export default function Toolbar({ sceneRef, onOpenSchemes }: ToolbarProps) {
 
         <div className="w-px h-6 bg-pink-200" />
 
-        {isMobile && selectedInstanceId && (
+        {selectedInstanceId && (
           <>
-            <div className="relative">
-              <button
-                onClick={() => setShowGizmoOptions(!showGizmoOptions)}
-                className="p-2 rounded-full bg-purple-100 text-purple-600 hover:bg-purple-200 transition-all duration-200 flex items-center gap-1"
-              >
-                <GizmoIcon className="w-5 h-5" />
-                {showGizmoOptions ? (
-                  <ChevronUp className="w-4 h-4" />
-                ) : (
-                  <ChevronDown className="w-4 h-4" />
-                )}
-              </button>
-
-              {showGizmoOptions && (
-                <div className="absolute bottom-full left-0 mb-2 bg-white rounded-2xl shadow-soft p-2 flex flex-col gap-1 min-w-[120px]">
-                  <button
-                    onClick={() => handleGizmoModeChange('translate')}
-                    className={clsx(
-                      'p-2 rounded-xl flex items-center gap-2 text-sm transition-colors',
-                      gizmoMode === 'translate'
-                        ? 'bg-purple-100 text-purple-600'
-                        : 'hover:bg-gray-100 text-gray-600'
-                    )}
-                  >
-                    <Move className="w-4 h-4" />
-                    移动
-                  </button>
-                  <button
-                    onClick={() => handleGizmoModeChange('rotate')}
-                    className={clsx(
-                      'p-2 rounded-xl flex items-center gap-2 text-sm transition-colors',
-                      gizmoMode === 'rotate'
-                        ? 'bg-purple-100 text-purple-600'
-                        : 'hover:bg-gray-100 text-gray-600'
-                    )}
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    旋转
-                  </button>
-                  <button
-                    onClick={() => handleGizmoModeChange('scale')}
-                    className={clsx(
-                      'p-2 rounded-xl flex items-center gap-2 text-sm transition-colors',
-                      gizmoMode === 'scale'
-                        ? 'bg-purple-100 text-purple-600'
-                        : 'hover:bg-gray-100 text-gray-600'
-                    )}
-                  >
-                    <Maximize2 className="w-4 h-4" />
-                    缩放
-                  </button>
-                </div>
-              )}
+            <div className="flex items-center gap-1">
+              {gizmoControls.map(({ mode, icon: Icon, label }) => (
+                <button
+                  key={mode}
+                  onClick={() => handleGizmoModeChange(mode)}
+                  className={clsx(
+                    'p-2 rounded-full transition-all duration-200',
+                    gizmoMode === mode
+                      ? 'bg-purple-500 text-white shadow-cute scale-110'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  )}
+                  title={label}
+                >
+                  <Icon className="w-5 h-5" />
+                </button>
+              ))}
             </div>
 
             <div className="w-px h-6 bg-pink-200" />
-          </>
-        )}
 
-        {selectedInstanceId && (
-          <>
             <button
-              onClick={() => setShowDeleteConfirm(true)}
+              onClick={onDelete}
               className="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-all duration-200 hover:scale-110"
               title="删除家具"
             >
@@ -234,25 +190,9 @@ export default function Toolbar({ sceneRef, onOpenSchemes }: ToolbarProps) {
         </button>
       </div>
 
-      {showDeleteConfirm && (
-        <div className="absolute top-full mt-3 left-1/2 -translate-x-1/2 bg-white rounded-2xl shadow-soft p-4 min-w-[240px]">
-          <p className="text-gray-700 mb-3 text-center font-medium">
-            确定要删除这件家具吗？
-          </p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowDeleteConfirm(false)}
-              className="flex-1 py-2 px-4 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors font-medium"
-            >
-              取消
-            </button>
-            <button
-              onClick={handleDelete}
-              className="flex-1 py-2 px-4 rounded-xl bg-red-500 text-white hover:bg-red-600 transition-colors font-medium"
-            >
-              删除
-            </button>
-          </div>
+      {selectedInstanceId && (
+        <div className="bg-white/80 backdrop-blur-sm rounded-full px-3 py-1 text-xs text-gray-500">
+          已选中家具 · 拖动 gizmo 调整位置
         </div>
       )}
     </div>
