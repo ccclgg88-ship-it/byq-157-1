@@ -144,6 +144,14 @@ export class LightingSystem {
     return this.isTransitioning;
   }
 
+  public getTransitionProgress(): number {
+    return this.easeInOutCubic(this.transitionProgress);
+  }
+
+  public getTargetIsNight(): boolean {
+    return this.targetIsNight;
+  }
+
   private lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
   }

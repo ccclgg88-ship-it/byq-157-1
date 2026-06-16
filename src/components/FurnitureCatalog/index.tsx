@@ -11,7 +11,7 @@ interface FurnitureCatalogProps {
 }
 
 export default function FurnitureCatalog({ sceneRef }: FurnitureCatalogProps) {
-  const { activeCategory, setActiveCategory, isMobile, collisionWarning, addFurniture } = useSceneStore();
+  const { activeCategory, setActiveCategory, isMobile, collisionWarning } = useSceneStore();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   const categories: CategoryType[] = ['sleep', 'food', 'play', 'decor'];
@@ -39,12 +39,22 @@ export default function FurnitureCatalog({ sceneRef }: FurnitureCatalogProps) {
   const handleItemClick = (furnitureId: string) => {
     const furnitureData = FURNITURE_DATA.find((f) => f.id === furnitureId);
     if (!furnitureData?.unlocked) return;
+    if (!sceneRef.current) return;
 
     const offsetX = (Math.random() - 0.5) * 4;
     const offsetZ = (Math.random() - 0.5) * 4;
     const instanceId = generateInstanceId();
 
-    addFurniture(furnitureId, { x: offsetX, y: 0, z: offsetZ }, instanceId);
+    const createdId = sceneRef.current.addFurniture(
+      furnitureId,
+      { x: offsetX, y: 0, z: offsetZ },
+      { x: 0, y: 0, z: 0 },
+      instanceId
+    );
+
+    if (createdId) {
+      sceneRef.current?.selectFurnitureById(createdId);
+    }
   };
 
   return (

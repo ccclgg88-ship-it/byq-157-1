@@ -12,10 +12,10 @@ export default function SceneViewport({ sceneRef }: SceneViewportProps) {
   const syncingRef = useRef(false);
 
   const {
-    furniture,
     dayTime,
     showGrid,
     gizmoMode,
+    furniture,
   } = useSceneStore();
 
   useEffect(() => {
@@ -39,26 +39,54 @@ export default function SceneViewport({ sceneRef }: SceneViewportProps) {
         syncingRef.current = true;
 
         const state = useSceneStore.getState();
-        const newInstance: FurnitureInstance = {
-          instanceId,
-          furnitureId,
-          position,
-          rotation,
-          scale: { x: 1, y: 1, z: 1 },
-        };
+        const exists = state.furniture.some(f => f.instanceId === instanceId);
+        if (!exists) {
+          const newInstance: FurnitureInstance = {
+            instanceId,
+            furnitureId,
+            position,
+            rotation,
+            scale: { x: 1, y: 1, z: 1 },
+          };
 
-        const newFurniture = [...state.furniture, newInstance];
-        const newPast = [...state.history.past, state.furniture].slice(-10);
+          const newFurniture = [...state.furniture, newInstance];
+          const newPast = [...state.history.past, state.furniture].slice(-10);
 
-        useSceneStore.setState({
-          furniture: newFurniture,
-          selectedInstanceId: instanceId,
-          history: {
-            past: newPast,
-            present: newFurniture,
-            future: [],
-          },
+          useSceneStore.setState({
+            furniture: newFurniture,
+            selectedInstanceId: instanceId,
+            history: {
+              past: newPast,
+              present: newFurniture,
+              future: [],
+            },
+          });
+        }
+
+        requestAnimationFrame(() => {
+          syncingRef.current = false;
         });
+      },
+      onFurnitureRemoved: (instanceId) => {
+        if (syncingRef.current) return;
+        syncingRef.current = true;
+
+        const state = useSceneStore.getState();
+        const exists = state.furniture.some(f => f.instanceId === instanceId);
+        if (exists) {
+          const newFurniture = state.furniture.filter(f => f.instanceId !== instanceId);
+          const newPast = [...state.history.past, state.furniture].slice(-10);
+
+          useSceneStore.setState({
+            furniture: newFurniture,
+            selectedInstanceId: state.selectedInstanceId === instanceId ? null : state.selectedInstanceId,
+            history: {
+              past: newPast,
+              present: newFurniture,
+              future: [],
+            },
+          });
+        }
 
         requestAnimationFrame(() => {
           syncingRef.current = false;
@@ -76,6 +104,14 @@ export default function SceneViewport({ sceneRef }: SceneViewportProps) {
     sceneManager.setGridVisible(initialState.showGrid);
     sceneManager.setGizmoMode(initialState.gizmoMode);
 
+    syncingRef.current = true;
+    initialState.furniture.forEach(f => {
+      sceneManager.addFurniture(f.furnitureId, f.position, f.rotation, f.instanceId, false);
+    });
+    requestAnimationFrame(() => {
+      syncingRef.current = false;
+    });
+
     return () => {
       sceneManager.destroy();
       sceneRef.current = null;
@@ -90,6 +126,8 @@ export default function SceneViewport({ sceneRef }: SceneViewportProps) {
 
     sceneRef.current.getFurnitureInstanceIds().forEach((id) => existingIds.add(id));
 
+    syncingRef.current = true;
+
     existingIds.forEach((id) => {
       if (!currentIds.has(id)) {
         sceneRef.current?.removeFurniture(id);
@@ -98,10 +136,14 @@ export default function SceneViewport({ sceneRef }: SceneViewportProps) {
 
     furniture.forEach((f) => {
       if (!existingIds.has(f.instanceId)) {
-        sceneRef.current?.addFurniture(f.furnitureId, f.position, f.rotation, f.instanceId);
+        sceneRef.current?.addFurniture(f.furnitureId, f.position, f.rotation, f.instanceId, false);
       } else {
         sceneRef.current?.updateFurniture(f.instanceId, f);
       }
+    });
+
+    requestAnimationFrame(() => {
+      syncingRef.current = false;
     });
   }, [furniture]);
 

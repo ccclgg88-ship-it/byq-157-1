@@ -14,7 +14,8 @@ import { FURNITURE_DATA } from '@/data/furniture';
 export interface SceneCallbacks {
   onSelectFurniture: (instanceId: string | null) => void;
   onFurnitureMoved: (instanceId: string, position: { x: number; y: number; z: number }, rotation: { x: number; y: number; z: number }) => void;
-  requestAddFurniture: (furnitureId: string, position: { x: number; y: number; z: number }) => string | null;
+  onFurnitureAdded: (instanceId: string, furnitureId: string, position: { x: number; y: number; z: number }, rotation: { x: number; y: number; z: number }) => void;
+  onFurnitureRemoved: (instanceId: string) => void;
   onCollision: (hasCollision: boolean) => void;
 }
 
@@ -221,7 +222,7 @@ export class SceneManager {
         if (!collision) {
           const instanceId = this.addFurniture(furnitureId, { x, y: 0, z }, { x: 0, y: 0, z: 0 });
           if (instanceId) {
-            this.callbacks.onFurnitureAdded(instanceId, furnitureId, { x, y: 0, z }, { x: 0, y: 0, z: 0 });
+            this.selectFurnitureById(instanceId);
           }
         } else {
           this.callbacks.onCollision(true);
@@ -311,7 +312,8 @@ export class SceneManager {
     furnitureId: string,
     position: { x: number; y: number; z: number },
     rotation: { x: number; y: number; z: number },
-    instanceId?: string
+    instanceId?: string,
+    triggerCallback: boolean = true
   ): string {
     const furnitureData = FURNITURE_DATA.find((f) => f.id === furnitureId);
     if (!furnitureData) return '';
@@ -330,6 +332,10 @@ export class SceneManager {
       this.furnitureFactory.setLightEnabled(group, true);
     }
 
+    if (triggerCallback) {
+      this.callbacks.onFurnitureAdded(newInstanceId, furnitureId, position, rotation);
+    }
+
     return newInstanceId;
   }
 
@@ -341,6 +347,14 @@ export class SceneManager {
       }
       this.scene.remove(group);
       this.furnitureMap.delete(instanceId);
+      this.callbacks.onFurnitureRemoved(instanceId);
+    }
+  }
+
+  public selectFurnitureById(instanceId: string): void {
+    const group = this.furnitureMap.get(instanceId);
+    if (group) {
+      this.selectFurniture(group);
     }
   }
 
@@ -405,7 +419,7 @@ export class SceneManager {
     );
   }
 
-  private checkCollisionAtPosition(
+  public checkCollisionAtPosition(
     furnitureId: string,
     x: number,
     z: number,
@@ -481,7 +495,7 @@ export class SceneManager {
     }
 
     this.lighting.setNight(isNight);
-    this.room.setNightMode(isNight);
+    this.room.updateNightMode(isNight);
 
     this.furnitureMap.forEach((group, instanceId) => {
       const data = FURNITURE_DATA.find((f) => f.id === group.userData.furnitureId);

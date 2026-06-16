@@ -7,27 +7,38 @@ export class Room {
   private floorMaterial: THREE.MeshStandardMaterial;
   private ceilingMaterial: THREE.MeshStandardMaterial;
   private windowStars: THREE.Points | null = null;
-  public starsMaterial: THREE.PointsMaterial | null = null;
+  private windowGlassMaterial: THREE.MeshStandardMaterial | null = null;
+
+  private readonly DOOR_WIDTH = 1.6;
+  private readonly DOOR_HEIGHT = 2.4;
+  private readonly DOOR_POS_X = ROOM_WIDTH / 2 - 1.5;
+  private readonly DOOR_POS_Z = -ROOM_DEPTH / 2;
+
+  private readonly WINDOW_WIDTH = 2.4;
+  private readonly WINDOW_HEIGHT = 1.6;
+  private readonly WINDOW_CENTER_X = -2.5;
+  private readonly WINDOW_CENTER_Y = 2.2;
+  private readonly WINDOW_CENTER_Z = -ROOM_DEPTH / 2;
 
   constructor() {
     this.group = new THREE.Group();
 
     this.wallMaterial = new THREE.MeshStandardMaterial({
       color: 0xfff0f5,
-      roughness: 0.85,
-      metalness: 0.05,
+      roughness: 0.88,
+      metalness: 0.03,
       side: THREE.FrontSide,
     });
 
     this.floorMaterial = new THREE.MeshStandardMaterial({
       color: 0xe8d5c4,
-      roughness: 0.9,
-      metalness: 0.05,
+      roughness: 0.92,
+      metalness: 0.03,
     });
 
     this.ceilingMaterial = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      roughness: 0.95,
+      roughness: 0.96,
       metalness: 0,
     });
 
@@ -36,7 +47,7 @@ export class Room {
 
   private createRoom() {
     const wallThickness = 0.3;
-    const cornerRadius = 1.0;
+    const cornerRadius = 0.8;
 
     const floorGeo = new THREE.BoxGeometry(ROOM_WIDTH + wallThickness * 2, 0.2, ROOM_DEPTH + wallThickness * 2);
     const floor = new THREE.Mesh(floorGeo, this.floorMaterial);
@@ -44,32 +55,9 @@ export class Room {
     floor.receiveShadow = true;
     this.group.add(floor);
 
-    const backWall = new THREE.Mesh(
-      new THREE.BoxGeometry(ROOM_WIDTH, ROOM_HEIGHT, wallThickness),
-      this.wallMaterial
-    );
-    backWall.position.set(0, ROOM_HEIGHT / 2, -ROOM_DEPTH / 2 + wallThickness / 2);
-    backWall.receiveShadow = true;
-    backWall.castShadow = true;
-    this.group.add(backWall);
-
-    const leftWall = new THREE.Mesh(
-      new THREE.BoxGeometry(wallThickness, ROOM_HEIGHT, ROOM_DEPTH),
-      this.wallMaterial
-    );
-    leftWall.position.set(-ROOM_WIDTH / 2 + wallThickness / 2, ROOM_HEIGHT / 2, 0);
-    leftWall.receiveShadow = true;
-    leftWall.castShadow = true;
-    this.group.add(leftWall);
-
-    const rightWall = new THREE.Mesh(
-      new THREE.BoxGeometry(wallThickness, ROOM_HEIGHT, ROOM_DEPTH),
-      this.wallMaterial
-    );
-    rightWall.position.set(ROOM_WIDTH / 2 - wallThickness / 2, ROOM_HEIGHT / 2, 0);
-    rightWall.receiveShadow = true;
-    rightWall.castShadow = true;
-    this.group.add(rightWall);
+    this.createBackWallWithDoorAndWindow(wallThickness);
+    this.createLeftWall(wallThickness);
+    this.createRightWall(wallThickness);
 
     const ceiling = new THREE.Mesh(
       new THREE.BoxGeometry(ROOM_WIDTH, wallThickness, ROOM_DEPTH),
@@ -84,6 +72,209 @@ export class Room {
     this.createWindow();
     this.createCarpet();
     this.createBaseboard();
+  }
+
+  private createBackWallWithDoorAndWindow(wallThickness: number) {
+    const wallZ = -ROOM_DEPTH / 2 + wallThickness / 2;
+
+    const doorLeft = this.DOOR_POS_X - this.DOOR_WIDTH / 2;
+    const doorRight = this.DOOR_POS_X + this.DOOR_WIDTH / 2;
+    const doorTop = this.DOOR_HEIGHT;
+
+    const winLeft = this.WINDOW_CENTER_X - this.WINDOW_WIDTH / 2;
+    const winRight = this.WINDOW_CENTER_X + this.WINDOW_WIDTH / 2;
+    const winBottom = this.WINDOW_CENTER_Y - this.WINDOW_HEIGHT / 2;
+    const winTop = this.WINDOW_CENTER_Y + this.WINDOW_HEIGHT / 2;
+
+    const xSegments: Array<[number, number]> = [];
+    let cursor = -ROOM_WIDTH / 2;
+    const cuts = [doorLeft, doorRight, winLeft, winRight].sort((a, b) => a - b);
+
+    for (const cut of cuts) {
+      if (cut > cursor) {
+        xSegments.push([cursor, cut]);
+      }
+      cursor = cut;
+    }
+    if (cursor < ROOM_WIDTH / 2) {
+      xSegments.push([cursor, ROOM_WIDTH / 2]);
+    }
+
+    xSegments.forEach(([xStart, xEnd]) => {
+      const segWidth = xEnd - xStart;
+      if (segWidth <= 0) return;
+      const xCenter = (xStart + xEnd) / 2;
+
+      const inDoorRange = xEnd <= doorRight && xStart >= doorLeft;
+      const inWinRange = xEnd <= winRight && xStart >= winLeft;
+
+      if (inDoorRange) {
+        if (doorTop < ROOM_HEIGHT) {
+          const aboveH = ROOM_HEIGHT - doorTop;
+          const seg = new THREE.Mesh(
+            new THREE.BoxGeometry(segWidth, aboveH, wallThickness),
+            this.wallMaterial
+          );
+          seg.position.set(xCenter, doorTop + aboveH / 2, wallZ);
+          seg.receiveShadow = true;
+          seg.castShadow = true;
+          this.group.add(seg);
+        }
+      } else if (inWinRange) {
+        if (winBottom > 0) {
+          const belowH = winBottom;
+          const seg = new THREE.Mesh(
+            new THREE.BoxGeometry(segWidth, belowH, wallThickness),
+            this.wallMaterial
+          );
+          seg.position.set(xCenter, belowH / 2, wallZ);
+          seg.receiveShadow = true;
+          seg.castShadow = true;
+          this.group.add(seg);
+        }
+        if (winTop < ROOM_HEIGHT) {
+          const aboveH = ROOM_HEIGHT - winTop;
+          const seg = new THREE.Mesh(
+            new THREE.BoxGeometry(segWidth, aboveH, wallThickness),
+            this.wallMaterial
+          );
+          seg.position.set(xCenter, winTop + aboveH / 2, wallZ);
+          seg.receiveShadow = true;
+          seg.castShadow = true;
+          this.group.add(seg);
+        }
+      } else {
+        const overlapsDoor = !(xEnd <= doorLeft || xStart >= doorRight);
+        const overlapsWin = !(xEnd <= winLeft || xStart >= winRight);
+
+        if (!overlapsDoor && !overlapsWin) {
+          const seg = new THREE.Mesh(
+            new THREE.BoxGeometry(segWidth, ROOM_HEIGHT, wallThickness),
+            this.wallMaterial
+          );
+          seg.position.set(xCenter, ROOM_HEIGHT / 2, wallZ);
+          seg.receiveShadow = true;
+          seg.castShadow = true;
+          this.group.add(seg);
+        } else if (overlapsDoor) {
+          const effDoorLeft = Math.max(doorLeft, xStart);
+          const effDoorRight = Math.min(doorRight, xEnd);
+
+          const leftPartW = effDoorLeft - xStart;
+          if (leftPartW > 0) {
+            const seg = new THREE.Mesh(
+              new THREE.BoxGeometry(leftPartW, ROOM_HEIGHT, wallThickness),
+              this.wallMaterial
+            );
+            seg.position.set(xStart + leftPartW / 2, ROOM_HEIGHT / 2, wallZ);
+            seg.receiveShadow = true;
+            seg.castShadow = true;
+            this.group.add(seg);
+          }
+
+          if (doorTop < ROOM_HEIGHT) {
+            const aboveW = effDoorRight - effDoorLeft;
+            const aboveH = ROOM_HEIGHT - doorTop;
+            if (aboveW > 0) {
+              const seg = new THREE.Mesh(
+                new THREE.BoxGeometry(aboveW, aboveH, wallThickness),
+                this.wallMaterial
+              );
+              seg.position.set((effDoorLeft + effDoorRight) / 2, doorTop + aboveH / 2, wallZ);
+              seg.receiveShadow = true;
+              seg.castShadow = true;
+              this.group.add(seg);
+            }
+          }
+
+          const rightPartW = xEnd - effDoorRight;
+          if (rightPartW > 0) {
+            const seg = new THREE.Mesh(
+              new THREE.BoxGeometry(rightPartW, ROOM_HEIGHT, wallThickness),
+              this.wallMaterial
+            );
+            seg.position.set(effDoorRight + rightPartW / 2, ROOM_HEIGHT / 2, wallZ);
+            seg.receiveShadow = true;
+            seg.castShadow = true;
+            this.group.add(seg);
+          }
+        } else if (overlapsWin) {
+          const effWinLeft = Math.max(winLeft, xStart);
+          const effWinRight = Math.min(winRight, xEnd);
+
+          const leftPartW = effWinLeft - xStart;
+          if (leftPartW > 0) {
+            const seg = new THREE.Mesh(
+              new THREE.BoxGeometry(leftPartW, ROOM_HEIGHT, wallThickness),
+              this.wallMaterial
+            );
+            seg.position.set(xStart + leftPartW / 2, ROOM_HEIGHT / 2, wallZ);
+            seg.receiveShadow = true;
+            seg.castShadow = true;
+            this.group.add(seg);
+          }
+
+          const midW = effWinRight - effWinLeft;
+          if (midW > 0) {
+            if (winBottom > 0) {
+              const seg = new THREE.Mesh(
+                new THREE.BoxGeometry(midW, winBottom, wallThickness),
+                this.wallMaterial
+              );
+              seg.position.set((effWinLeft + effWinRight) / 2, winBottom / 2, wallZ);
+              seg.receiveShadow = true;
+              seg.castShadow = true;
+              this.group.add(seg);
+            }
+            if (winTop < ROOM_HEIGHT) {
+              const aboveH = ROOM_HEIGHT - winTop;
+              const seg = new THREE.Mesh(
+                new THREE.BoxGeometry(midW, aboveH, wallThickness),
+                this.wallMaterial
+              );
+              seg.position.set((effWinLeft + effWinRight) / 2, winTop + aboveH / 2, wallZ);
+              seg.receiveShadow = true;
+              seg.castShadow = true;
+              this.group.add(seg);
+            }
+          }
+
+          const rightPartW = xEnd - effWinRight;
+          if (rightPartW > 0) {
+            const seg = new THREE.Mesh(
+              new THREE.BoxGeometry(rightPartW, ROOM_HEIGHT, wallThickness),
+              this.wallMaterial
+            );
+            seg.position.set(effWinRight + rightPartW / 2, ROOM_HEIGHT / 2, wallZ);
+            seg.receiveShadow = true;
+            seg.castShadow = true;
+            this.group.add(seg);
+          }
+        }
+      }
+    });
+  }
+
+  private createLeftWall(wallThickness: number) {
+    const leftWall = new THREE.Mesh(
+      new THREE.BoxGeometry(wallThickness, ROOM_HEIGHT, ROOM_DEPTH),
+      this.wallMaterial
+    );
+    leftWall.position.set(-ROOM_WIDTH / 2 + wallThickness / 2, ROOM_HEIGHT / 2, 0);
+    leftWall.receiveShadow = true;
+    leftWall.castShadow = true;
+    this.group.add(leftWall);
+  }
+
+  private createRightWall(wallThickness: number) {
+    const rightWall = new THREE.Mesh(
+      new THREE.BoxGeometry(wallThickness, ROOM_HEIGHT, ROOM_DEPTH),
+      this.wallMaterial
+    );
+    rightWall.position.set(ROOM_WIDTH / 2 - wallThickness / 2, ROOM_HEIGHT / 2, 0);
+    rightWall.receiveShadow = true;
+    rightWall.castShadow = true;
+    this.group.add(rightWall);
   }
 
   private createCorners(radius: number, height: number, wallThickness: number) {
@@ -106,330 +297,297 @@ export class Room {
   }
 
   private createBaseboard() {
-    const baseboardHeight = 0.12;
-    const baseboardDepth = 0.03;
+    const baseboardHeight = 0.1;
+    const baseboardDepth = 0.025;
     const baseboardMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      roughness: 0.8,
+      roughness: 0.82,
     });
 
     const backBaseboard = new THREE.Mesh(
       new THREE.BoxGeometry(ROOM_WIDTH, baseboardHeight, baseboardDepth),
       baseboardMat
     );
-    backBaseboard.position.set(0, baseboardHeight / 2, -ROOM_DEPTH / 2 + 0.15);
+    backBaseboard.position.set(0, baseboardHeight / 2, -ROOM_DEPTH / 2 + 0.16);
     this.group.add(backBaseboard);
 
     const leftBaseboard = new THREE.Mesh(
       new THREE.BoxGeometry(baseboardDepth, baseboardHeight, ROOM_DEPTH),
       baseboardMat
     );
-    leftBaseboard.position.set(-ROOM_WIDTH / 2 + 0.15, baseboardHeight / 2, 0);
+    leftBaseboard.position.set(-ROOM_WIDTH / 2 + 0.16, baseboardHeight / 2, 0);
     this.group.add(leftBaseboard);
 
     const rightBaseboard = new THREE.Mesh(
       new THREE.BoxGeometry(baseboardDepth, baseboardHeight, ROOM_DEPTH),
       baseboardMat
     );
-    rightBaseboard.position.set(ROOM_WIDTH / 2 - 0.15, baseboardHeight / 2, 0);
+    rightBaseboard.position.set(ROOM_WIDTH / 2 - 0.16, baseboardHeight / 2, 0);
     this.group.add(rightBaseboard);
   }
 
   private createDoor() {
-    const doorWidth = 1.8;
-    const doorHeight = 2.4;
-    const doorX = ROOM_WIDTH / 2 - 1.5;
-    const doorZ = -ROOM_DEPTH / 2 + 0.15;
+    const doorWidth = this.DOOR_WIDTH;
+    const doorHeight = this.DOOR_HEIGHT;
+    const wallThickness = 0.3;
+    const doorX = this.DOOR_POS_X;
+    const doorZ = -ROOM_DEPTH / 2 + wallThickness / 2;
 
-    const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0xd4a574, roughness: 0.7 });
+    const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0xd4a574, roughness: 0.72 });
+
+    const frameT = 0.1;
+    const frameD = wallThickness + 0.1;
 
     const leftFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(0.12, doorHeight, 0.2),
+      new THREE.BoxGeometry(frameT, doorHeight, frameD),
       doorFrameMat
     );
-    leftFrame.position.set(doorX - doorWidth / 2 + 0.06, doorHeight / 2, doorZ);
+    leftFrame.position.set(doorX - doorWidth / 2 + frameT / 2, doorHeight / 2, doorZ);
     leftFrame.castShadow = true;
     this.group.add(leftFrame);
 
     const rightFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(0.12, doorHeight, 0.2),
+      new THREE.BoxGeometry(frameT, doorHeight, frameD),
       doorFrameMat
     );
-    rightFrame.position.set(doorX + doorWidth / 2 - 0.06, doorHeight / 2, doorZ);
+    rightFrame.position.set(doorX + doorWidth / 2 - frameT / 2, doorHeight / 2, doorZ);
     rightFrame.castShadow = true;
     this.group.add(rightFrame);
 
     const topFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(doorWidth + 0.04, 0.12, 0.2),
+      new THREE.BoxGeometry(doorWidth, frameT, frameD),
       doorFrameMat
     );
-    topFrame.position.set(doorX, doorHeight - 0.06, doorZ);
+    topFrame.position.set(doorX, doorHeight - frameT / 2, doorZ);
     topFrame.castShadow = true;
     this.group.add(topFrame);
 
-    const doorMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.6 });
+    const doorMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.62 });
     const door = new THREE.Mesh(
-      new THREE.BoxGeometry(doorWidth - 0.18, doorHeight - 0.2, 0.08),
+      new THREE.BoxGeometry(doorWidth - frameT * 2, doorHeight - frameT - 0.01, 0.06),
       doorMat
     );
-    door.position.set(doorX, (doorHeight - 0.2) / 2, doorZ + 0.06);
+    door.position.set(doorX, (doorHeight - frameT - 0.01) / 2, doorZ + wallThickness / 2 + 0.03);
     door.castShadow = true;
     door.receiveShadow = true;
     this.group.add(door);
 
-    const doorKnobGeo = new THREE.SphereGeometry(0.06, 16, 16);
-    const doorKnobMat = new THREE.MeshStandardMaterial({
+    const knobGeo = new THREE.SphereGeometry(0.055, 16, 16);
+    const knobMat = new THREE.MeshStandardMaterial({
       color: 0xffd700,
-      metalness: 0.9,
-      roughness: 0.2,
+      metalness: 0.92,
+      roughness: 0.18,
     });
-    const doorKnob = new THREE.Mesh(doorKnobGeo, doorKnobMat);
-    doorKnob.position.set(doorX - doorWidth / 2 + 0.35, doorHeight / 2, doorZ + 0.12);
-    this.group.add(doorKnob);
+    const knob = new THREE.Mesh(knobGeo, knobMat);
+    knob.position.set(doorX - doorWidth / 2 + 0.32, doorHeight / 2, doorZ + wallThickness / 2 + 0.11);
+    this.group.add(knob);
 
-    const panelWidth = (doorWidth - 0.4) / 2;
-    const panelHeight = (doorHeight - 0.5) / 2;
+    const panelW = (doorWidth - frameT * 2 - 0.35) / 2;
+    const panelH = (doorHeight - frameT - 0.45) / 2;
     const panelMat = new THREE.MeshStandardMaterial({
       color: 0xa0522d,
-      roughness: 0.55,
+      roughness: 0.58,
     });
 
-    const panelPositions = [
-      { x: doorX - panelWidth / 2 - 0.1, y: doorHeight / 2 + panelHeight / 2 + 0.1 },
-      { x: doorX + panelWidth / 2 + 0.1, y: doorHeight / 2 + panelHeight / 2 + 0.1 },
-      { x: doorX - panelWidth / 2 - 0.1, y: doorHeight / 2 - panelHeight / 2 - 0.1 },
-      { x: doorX + panelWidth / 2 + 0.1, y: doorHeight / 2 - panelHeight / 2 - 0.1 },
+    const panelPts = [
+      { x: doorX - panelW / 2 - 0.1, y: panelH / 2 + 0.14 },
+      { x: doorX + panelW / 2 + 0.1, y: panelH / 2 + 0.14 },
+      { x: doorX - panelW / 2 - 0.1, y: doorHeight / 2 + panelH / 2 + 0.04 },
+      { x: doorX + panelW / 2 + 0.1, y: doorHeight / 2 + panelH / 2 + 0.04 },
     ];
 
-    panelPositions.forEach(({ x, y }) => {
+    panelPts.forEach(({ x, y }) => {
       const panel = new THREE.Mesh(
-        new THREE.BoxGeometry(panelWidth, panelHeight, 0.03),
+        new THREE.BoxGeometry(panelW, panelH, 0.018),
         panelMat
       );
-      panel.position.set(x, y, doorZ + 0.1);
+      panel.position.set(x, y, doorZ + wallThickness / 2 + 0.07);
       this.group.add(panel);
     });
   }
 
   private createWindow() {
-    const windowWidth = 2.5;
-    const windowHeight = 1.8;
-    const windowX = -3;
-    const windowY = 2.2;
-    const windowZ = -ROOM_DEPTH / 2 + 0.15;
+    const windowWidth = this.WINDOW_WIDTH;
+    const windowHeight = this.WINDOW_HEIGHT;
+    const windowX = this.WINDOW_CENTER_X;
+    const windowY = this.WINDOW_CENTER_Y;
+    const wallThickness = 0.3;
+    const windowZ = -ROOM_DEPTH / 2 + wallThickness / 2;
 
     const windowFrameMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      roughness: 0.3,
+      roughness: 0.32,
     });
 
+    const frameT = 0.1;
+    const frameD = wallThickness + 0.1;
+
     const topFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(windowWidth + 0.2, 0.12, 0.18),
+      new THREE.BoxGeometry(windowWidth + frameT * 2, frameT, frameD),
       windowFrameMat
     );
-    topFrame.position.set(windowX, windowY + windowHeight / 2, windowZ);
+    topFrame.position.set(windowX, windowY + windowHeight / 2 + frameT / 2, windowZ);
     this.group.add(topFrame);
 
     const bottomFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(windowWidth + 0.2, 0.12, 0.18),
+      new THREE.BoxGeometry(windowWidth + frameT * 2, frameT, frameD),
       windowFrameMat
     );
-    bottomFrame.position.set(windowX, windowY - windowHeight / 2, windowZ);
+    bottomFrame.position.set(windowX, windowY - windowHeight / 2 - frameT / 2, windowZ);
     this.group.add(bottomFrame);
 
     const leftFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(0.12, windowHeight, 0.18),
+      new THREE.BoxGeometry(frameT, windowHeight + frameT * 2, frameD),
       windowFrameMat
     );
-    leftFrame.position.set(windowX - windowWidth / 2, windowY, windowZ);
+    leftFrame.position.set(windowX - windowWidth / 2 - frameT / 2, windowY, windowZ);
     this.group.add(leftFrame);
 
     const rightFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(0.12, windowHeight, 0.18),
+      new THREE.BoxGeometry(frameT, windowHeight + frameT * 2, frameD),
       windowFrameMat
     );
-    rightFrame.position.set(windowX + windowWidth / 2, windowY, windowZ);
+    rightFrame.position.set(windowX + windowWidth / 2 + frameT / 2, windowY, windowZ);
     this.group.add(rightFrame);
 
     const windowGlassMat = new THREE.MeshStandardMaterial({
       color: 0xb0e0e6,
       transparent: true,
-      opacity: 0.5,
-      roughness: 0.1,
-      metalness: 0.3,
+      opacity: 0.6,
+      roughness: 0.06,
+      metalness: 0.38,
     });
+    this.windowGlassMaterial = windowGlassMat;
     const windowGlass = new THREE.Mesh(
-      new THREE.PlaneGeometry(windowWidth - 0.2, windowHeight - 0.2),
+      new THREE.PlaneGeometry(windowWidth, windowHeight),
       windowGlassMat
     );
-    windowGlass.position.set(windowX, windowY, windowZ + 0.05);
+    windowGlass.position.set(windowX, windowY, windowZ + wallThickness / 2 + 0.005);
     this.group.add(windowGlass);
 
-    const crossBarH = new THREE.Mesh(
-      new THREE.BoxGeometry(windowWidth - 0.2, 0.06, 0.1),
+    const crossH = new THREE.Mesh(
+      new THREE.BoxGeometry(windowWidth, 0.055, 0.07),
       windowFrameMat
     );
-    crossBarH.position.set(windowX, windowY, windowZ + 0.08);
-    this.group.add(crossBarH);
+    crossH.position.set(windowX, windowY, windowZ + wallThickness / 2 + 0.045);
+    this.group.add(crossH);
 
-    const crossBarV = new THREE.Mesh(
-      new THREE.BoxGeometry(0.06, windowHeight - 0.2, 0.1),
+    const crossV = new THREE.Mesh(
+      new THREE.BoxGeometry(0.055, windowHeight, 0.07),
       windowFrameMat
     );
-    crossBarV.position.set(windowX, windowY, windowZ + 0.08);
-    this.group.add(crossBarV);
+    crossV.position.set(windowX, windowY, windowZ + wallThickness / 2 + 0.045);
+    this.group.add(crossV);
 
-    const starsGeometry = new THREE.BufferGeometry();
-    const starPositions: number[] = [];
-    for (let i = 0; i < 40; i++) {
-      starPositions.push(
+    const starsGeo = new THREE.BufferGeometry();
+    const starPts: number[] = [];
+    for (let i = 0; i < 28; i++) {
+      starPts.push(
         windowX - windowWidth / 2 + 0.3 + Math.random() * (windowWidth - 0.6),
         windowY - windowHeight / 2 + 0.3 + Math.random() * (windowHeight - 0.6),
-        windowZ + 0.03
+        windowZ + wallThickness / 2 + 0.015
       );
     }
-    starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
-    const starsMaterial = new THREE.PointsMaterial({
+    starsGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPts, 3));
+    const starsMat = new THREE.PointsMaterial({
       color: 0xffffaa,
-      size: 0.08,
+      size: 0.075,
       transparent: true,
       opacity: 0,
       sizeAttenuation: true,
     });
-    this.starsMaterial = starsMaterial;
-    const stars = new THREE.Points(starsGeometry, starsMaterial);
+    const stars = new THREE.Points(starsGeo, starsMat);
     this.windowStars = stars;
     this.group.add(stars);
 
-    const windowsillMat = new THREE.MeshStandardMaterial({
+    const sillMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      roughness: 0.4,
+      roughness: 0.42,
     });
-    const windowsill = new THREE.Mesh(
-      new THREE.BoxGeometry(windowWidth + 0.4, 0.08, 0.35),
-      windowsillMat
+    const sill = new THREE.Mesh(
+      new THREE.BoxGeometry(windowWidth + 0.45, 0.07, 0.32),
+      sillMat
     );
-    windowsill.position.set(windowX, windowY - windowHeight / 2 - 0.04, windowZ + 0.12);
-    windowsill.castShadow = true;
-    this.group.add(windowsill);
-
-    const smallPlant = this.createSmallPlant();
-    smallPlant.position.set(windowX + 0.6, windowY - windowHeight / 2 + 0.06, windowZ + 0.18);
-    this.group.add(smallPlant);
-  }
-
-  private createSmallPlant(): THREE.Group {
-    const group = new THREE.Group();
-
-    const potMat = new THREE.MeshStandardMaterial({ color: 0xe74c3c, roughness: 0.8 });
-    const pot = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.06, 0.15, 16),
-      potMat
-    );
-    pot.position.y = 0.075;
-    pot.castShadow = true;
-    group.add(pot);
-
-    const soilMat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.9 });
-    const soil = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.07, 0.07, 0.03, 16),
-      soilMat
-    );
-    soil.position.y = 0.15;
-    group.add(soil);
-
-    const leafColors = [0x27ae60, 0x2ecc71, 0x58d68d];
-    for (let i = 0; i < 5; i++) {
-      const leafMat = new THREE.MeshStandardMaterial({
-        color: leafColors[i % leafColors.length],
-        roughness: 0.8,
-        side: THREE.DoubleSide,
-      });
-      const leaf = new THREE.Mesh(
-        new THREE.SphereGeometry(0.1, 8, 8),
-        leafMat
-      );
-      leaf.scale.set(0.6 + Math.random() * 0.4, 1, 0.5 + Math.random() * 0.3);
-      leaf.position.set(
-        (Math.random() - 0.5) * 0.1,
-        0.2 + i * 0.05,
-        (Math.random() - 0.5) * 0.1
-      );
-      leaf.rotation.set(Math.random() * 0.3, Math.random() * Math.PI, Math.random() * 0.3);
-      leaf.castShadow = true;
-      group.add(leaf);
-    }
-
-    return group;
+    sill.position.set(windowX, windowY - windowHeight / 2 - frameT - 0.035, windowZ + wallThickness / 2 + 0.11);
+    sill.castShadow = true;
+    this.group.add(sill);
   }
 
   private createCarpet() {
-    const carpetWidth = 5;
-    const carpetHeight = 4;
-    const radius = 0.6;
+    const w = 5;
+    const h = 4;
+    const r = 0.55;
 
-    const carpetShape = new THREE.Shape();
-    carpetShape.moveTo(-carpetWidth / 2 + radius, -carpetHeight / 2);
-    carpetShape.lineTo(carpetWidth / 2 - radius, -carpetHeight / 2);
-    carpetShape.quadraticCurveTo(carpetWidth / 2, -carpetHeight / 2, carpetWidth / 2, -carpetHeight / 2 + radius);
-    carpetShape.lineTo(carpetWidth / 2, carpetHeight / 2 - radius);
-    carpetShape.quadraticCurveTo(carpetWidth / 2, carpetHeight / 2, carpetWidth / 2 - radius, carpetHeight / 2);
-    carpetShape.lineTo(-carpetWidth / 2 + radius, carpetHeight / 2);
-    carpetShape.quadraticCurveTo(-carpetWidth / 2, carpetHeight / 2, -carpetWidth / 2, carpetHeight / 2 - radius);
-    carpetShape.lineTo(-carpetWidth / 2, -carpetHeight / 2 + radius);
-    carpetShape.quadraticCurveTo(-carpetWidth / 2, -carpetHeight / 2, -carpetWidth / 2 + radius, -carpetHeight / 2);
+    const shape = new THREE.Shape();
+    shape.moveTo(-w / 2 + r, -h / 2);
+    shape.lineTo(w / 2 - r, -h / 2);
+    shape.quadraticCurveTo(w / 2, -h / 2, w / 2, -h / 2 + r);
+    shape.lineTo(w / 2, h / 2 - r);
+    shape.quadraticCurveTo(w / 2, h / 2, w / 2 - r, h / 2);
+    shape.lineTo(-w / 2 + r, h / 2);
+    shape.quadraticCurveTo(-w / 2, h / 2, -w / 2, h / 2 - r);
+    shape.lineTo(-w / 2, -h / 2 + r);
+    shape.quadraticCurveTo(-w / 2, -h / 2, -w / 2 + r, -h / 2);
 
-    const carpetGeometry = new THREE.ExtrudeGeometry(carpetShape, {
-      depth: 0.06,
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.05,
       bevelEnabled: true,
-      bevelThickness: 0.015,
-      bevelSize: 0.015,
+      bevelThickness: 0.012,
+      bevelSize: 0.012,
       bevelSegments: 2,
     });
 
-    const carpetMat = new THREE.MeshStandardMaterial({
+    const mat = new THREE.MeshStandardMaterial({
       color: 0xffb6c1,
-      roughness: 0.95,
+      roughness: 0.96,
     });
-    const carpet = new THREE.Mesh(carpetGeometry, carpetMat);
+    const carpet = new THREE.Mesh(geo, mat);
     carpet.rotation.x = -Math.PI / 2;
-    carpet.position.set(0, 0.005, 1.5);
+    carpet.position.set(0, 0.004, 1.5);
     carpet.receiveShadow = true;
     this.group.add(carpet);
 
-    const patternShape = new THREE.Shape();
-    const heartSize = 0.3;
-    patternShape.moveTo(0, heartSize * 0.5);
-    patternShape.bezierCurveTo(0, heartSize * 0.5, -heartSize * 0.5, 0, -heartSize * 0.5, -heartSize * 0.2);
-    patternShape.bezierCurveTo(-heartSize * 0.5, -heartSize * 0.5, -heartSize * 0.25, -heartSize * 0.5, 0, -heartSize * 0.25);
-    patternShape.bezierCurveTo(heartSize * 0.25, -heartSize * 0.5, heartSize * 0.5, -heartSize * 0.5, heartSize * 0.5, -heartSize * 0.2);
-    patternShape.bezierCurveTo(heartSize * 0.5, 0, 0, heartSize * 0.5, 0, heartSize * 0.5);
+    const heartS = 0.28;
+    const heartShape = new THREE.Shape();
+    heartShape.moveTo(0, heartS * 0.5);
+    heartShape.bezierCurveTo(0, heartS * 0.5, -heartS * 0.5, 0, -heartS * 0.5, -heartS * 0.2);
+    heartShape.bezierCurveTo(-heartS * 0.5, -heartS * 0.5, -heartS * 0.25, -heartS * 0.5, 0, -heartS * 0.25);
+    heartShape.bezierCurveTo(heartS * 0.25, -heartS * 0.5, heartS * 0.5, -heartS * 0.5, heartS * 0.5, -heartS * 0.2);
+    heartShape.bezierCurveTo(heartS * 0.5, 0, 0, heartS * 0.5, 0, heartS * 0.5);
 
-    const patternGeo = new THREE.ExtrudeGeometry(patternShape, { depth: 0.01, bevelEnabled: false });
-    const patternMat = new THREE.MeshStandardMaterial({
+    const heartGeo = new THREE.ExtrudeGeometry(heartShape, { depth: 0.01, bevelEnabled: false });
+    const heartMat = new THREE.MeshStandardMaterial({
       color: 0xff91a3,
-      roughness: 0.9,
+      roughness: 0.92,
     });
 
-    const patternPositions = [
-      { x: -1.2, z: 0.5 },
-      { x: 1.2, z: 0.5 },
-      { x: 0, z: 2.5 },
-      { x: -0.8, z: 2.2 },
-      { x: 0.8, z: 2.2 },
+    const heartPts = [
+      { x: -1.1, z: 0.4 },
+      { x: 1.1, z: 0.4 },
+      { x: 0, z: 2.4 },
+      { x: -0.7, z: 2.1 },
+      { x: 0.7, z: 2.1 },
     ];
 
-    patternPositions.forEach(({ x, z }) => {
-      const pattern = new THREE.Mesh(patternGeo, patternMat);
-      pattern.rotation.x = -Math.PI / 2;
-      pattern.position.set(x, 0.065, z);
-      this.group.add(pattern);
+    heartPts.forEach(({ x, z }) => {
+      const heart = new THREE.Mesh(heartGeo, heartMat);
+      heart.rotation.x = -Math.PI / 2;
+      heart.position.set(x, 0.055, z);
+      this.group.add(heart);
     });
   }
 
-  public updateDayNight(isNight: boolean): void {
-    if (this.starsMaterial) {
-      this.starsMaterial.opacity = isNight ? 0.9 : 0;
+  public updateNightMode(isNight: boolean, progress: number = 1) {
+    if (this.windowStars) {
+      const mat = this.windowStars.material as THREE.PointsMaterial;
+      mat.opacity = isNight ? progress * 0.95 : (1 - progress) * 0.95;
+    }
+    if (this.windowGlassMaterial) {
+      this.windowGlassMaterial.opacity = isNight
+        ? 0.25 + (1 - progress) * 0.35
+        : 0.6;
+      this.windowGlassMaterial.color.set(isNight ? 0x2c3e6b : 0xb0e0e6);
+      this.windowGlassMaterial.needsUpdate = true;
     }
   }
 }
